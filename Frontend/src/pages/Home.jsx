@@ -18,7 +18,7 @@ const Home = () => {
                 to="/register"
                 className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2 rounded-lg font-medium transition-colors duration-200"
               >
-                Get Started
+                Registration
               </Link>
             </div>
           </div>
@@ -39,7 +39,7 @@ const Home = () => {
               to="/register"
               className="bg-primary-600 hover:bg-primary-700 text-white px-8 py-4 rounded-lg font-bold text-lg transition-all duration-200 shadow-lg hover:shadow-xl"
             >
-              Create Account
+              Registration
             </Link>
             <Link
               to="/login"

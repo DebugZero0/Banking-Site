@@ -6,6 +6,7 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.removeItem('userAccount');
     }
     return response.data;
   },
@@ -15,6 +16,7 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.removeItem('userAccount');
     }
     return response.data;
   },
@@ -25,6 +27,7 @@ export const authService = {
     } finally {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('userAccount');
     }
   },
 

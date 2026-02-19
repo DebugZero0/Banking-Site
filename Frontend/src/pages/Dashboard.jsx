@@ -29,34 +29,23 @@ const Dashboard = () => {
         setError('');
 
         try {
-            // First, check if user has an account from localStorage (cached)
-            const storedAccount = localStorage.getItem('userAccount');
-            if (storedAccount) {
-                const accountData = JSON.parse(storedAccount);
+            try {
+                const response = await accountService.getCurrentUserAccount();
+                const accountData = response.account;
                 setAccount(accountData);
                 setHasAccount(true);
+                localStorage.setItem('userAccount', JSON.stringify(accountData));
                 if (!isAdmin) {
                     await fetchBalance(accountData._id);
                 }
-            } else {
-                // If not in localStorage, fetch from backend
-                try {
-                    const response = await accountService.getCurrentUserAccount();
-                    const accountData = response.account;
-                    setAccount(accountData);
-                    setHasAccount(true);
-                    localStorage.setItem('userAccount', JSON.stringify(accountData));
-                    if (!isAdmin) {
-                        await fetchBalance(accountData._id);
-                    }
-                } catch (err) {
-                    // User doesn't have an account yet
-                    if (err.response?.status === 404) {
-                        setAccount(null);
-                        setHasAccount(false);
-                    } else {
-                        setError('Failed to fetch account information');
-                    }
+            } catch (err) {
+                if (err.response?.status === 404) {
+                    setAccount(null);
+                    setHasAccount(false);
+                    setBalance(null);
+                    localStorage.removeItem('userAccount');
+                } else {
+                    setError('Failed to fetch account information');
                 }
             }
         } catch (err) {

@@ -16,6 +16,14 @@ async function register(req, res) {
     const user = new UserModel({ email, password, name });
     await user.save();
 
+    let emailSent = false;
+    try {
+        await emailService.sendRegistrationEmail(user.email, user.name);
+        emailSent = true;
+    } catch (error) {
+        console.error('Registration email failed:', error?.message || error);
+    }
+
     const token = jwt.sign({id: user._id }, process.env.JWT_SECRET, { expiresIn: '3d' });
     res.cookie('token', token);
 
@@ -30,11 +38,9 @@ async function register(req, res) {
             lastLoginAt: user.lastLoginAt,
             lastLogoutAt: user.lastLogoutAt,
         },
-        token 
+        token,
+        emailSent
     });
-
-    // Send registration email
-    await emailService.sendRegistrationEmail(user.email, user.name);
 }
 
 async function login(req, res) {

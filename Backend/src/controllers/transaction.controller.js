@@ -4,22 +4,81 @@ const emailService = require('../services/email.service');
 const accountModel = require('../Models/account.model');
 const mongoose = require('mongoose');
 
+async function sendTransactionNotifications(fromUserAccount, toUserAccount, amount, debitLedgerEntry, creditLedgerEntry) {
+    const shouldNotifySender = Boolean(
+        debitLedgerEntry && debitLedgerEntry.length > 0 && fromUserAccount?.user?.email
+    );
+    const shouldNotifyReceiver = Boolean(
+        creditLedgerEntry && creditLedgerEntry.length > 0 && toUserAccount?.user?.email
+    );
+
+    const senderPromise = shouldNotifySender
+        ? emailService.senderEmail(
+            fromUserAccount.user.email,
+            fromUserAccount.user.name,
+            amount,
+            toUserAccount?.user?.name || 'Recipient'
+        )
+        : Promise.resolve();
+
+    const receiverPromise = shouldNotifyReceiver
+        ? emailService.receiverEmail(
+            toUserAccount.user.email,
+            toUserAccount.user.name,
+            amount,
+            fromUserAccount?.user?.name || 'Sender'
+        )
+        : Promise.resolve();
+
+    const [senderResult, receiverResult] = await Promise.allSettled([senderPromise, receiverPromise]);
+
+    if (senderResult.status === 'rejected') {
+        console.error('Sender transaction email failed:', senderResult.reason);
+    }
+    if (receiverResult.status === 'rejected') {
+        console.error('Receiver transaction email failed:', receiverResult.reason);
+    }
+
+    return {
+        senderEmailSent: shouldNotifySender && senderResult.status === 'fulfilled',
+        receiverEmailSent: shouldNotifyReceiver && receiverResult.status === 'fulfilled',
+    };
+}
+
 
 async function createTransaction(req, res) {
     const {fromAccount, toAccount, amount , idempotencyKey} = req.body;
+    const normalizedAmount = Number(amount);
 
     // Validate request
-    if (!fromAccount || !toAccount || !amount || !idempotencyKey) {
+    if (!toAccount || !amount || !idempotencyKey) {
         return res.status(400).json({error: 'Missing required fields'});
     }
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+        return res.status(400).json({error: 'Amount must be a valid number greater than 0'});
+    }
+
     const fromUserAccount= await accountModel.findOne({
-        _id: fromAccount
+        user: req.user?._id
     }).populate('user')
+
+    if (!fromUserAccount) {
+        return res.status(404).json({error: 'Sender account not found for this user'});
+    }
+
+    if (fromAccount && String(fromUserAccount._id) !== String(fromAccount)) {
+        return res.status(403).json({error: 'Invalid sender account'});
+    }
+
     const toUserAccount= await accountModel.findOne({
         _id: toAccount
     }).populate('user')
     if (!fromUserAccount || !toUserAccount) {
         return res.status(404).json({error: 'Account not found'});
+    }
+
+    if (String(fromUserAccount._id) === String(toUserAccount._id)) {
+        return res.status(400).json({error: 'Sender and receiver accounts must be different'});
     }
 
     // validate idempotency key
@@ -56,7 +115,7 @@ async function createTransaction(req, res) {
 
     // Derive sender balance from ledger
     const balance = await fromUserAccount.getBalance();
-    if (balance < amount) {
+    if (balance < normalizedAmount) {
         return res.status(400).json({message: `Insufficient balance. Current balance is ${balance}`});
     }
 
@@ -67,25 +126,25 @@ async function createTransaction(req, res) {
     const transaction = new transactionModel({
         initiatedBy: req.user?._id,
         initiatedBySystemUser: req.user?.systemUser === true,
-        fromAccount,
+        fromAccount: fromUserAccount._id,
         toAccount,
-        amount,
+        amount: normalizedAmount,
         idempotencyKey,
         status: 'PENDING'
     });
     await transaction.save({ session });
 
     const debitLedgerEntry = await ledgerModel.create([{
-        account: fromAccount,
+        account: fromUserAccount._id,
         type: 'DEBIT',
-        amount: amount,
+        amount: normalizedAmount,
         transaction: transaction._id
     }], { session });
 
     const creditLedgerEntry = await ledgerModel.create([{
         account: toAccount,
         type: 'CREDIT',
-        amount: amount,
+        amount: normalizedAmount,
         transaction: transaction._id
     }], { session });
 
@@ -96,46 +155,33 @@ async function createTransaction(req, res) {
     await session.commitTransaction();
     session.endSession();
 
-    // Send email notifications 
-    try {
-    // Sender mail → only when debit happens
-    if (debitLedgerEntry && debitLedgerEntry.length > 0) {
-        await emailService.senderEmail(
-            fromUserAccount.user.email,
-            fromUserAccount.user.name,
-            amount,
-            toUserAccount.user.name
-        );
-    }
-
-    // Receiver mail → only when credit happens
-    if (creditLedgerEntry && creditLedgerEntry.length > 0) {
-        await emailService.receiverEmail(
-            toUserAccount.user.email,
-            toUserAccount.user.name,
-            amount,
-            fromUserAccount.user.name
-        );
-    }
-
-} catch (error) {
-    console.error('Error sending transaction emails:', error);
-}
+    const emailNotification = await sendTransactionNotifications(
+        fromUserAccount,
+        toUserAccount,
+        normalizedAmount,
+        debitLedgerEntry,
+        creditLedgerEntry
+    );
 
 
     res.status(201).json({
         message: 'Transaction completed successfully',
-        transaction: transaction
+        transaction: transaction,
+        emailNotification
     });
 }
 
 async function createInitialFundsTransaction(req, res) {
     const {toAccount, amount, idempotencyKey} = req.body;
+    const normalizedAmount = Number(amount);
     console.log(req); 
 
     // Validate request
     if (!toAccount || !amount || !idempotencyKey) {
         return res.status(400).json({error: 'Missing required fields'});
+    }
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+        return res.status(400).json({error: 'Amount must be a valid number greater than 0'});
     }
     const toUserAccount= await accountModel.findOne({
         _id: toAccount
@@ -151,6 +197,10 @@ async function createInitialFundsTransaction(req, res) {
         return res.status(404).json({error: 'System account not found for the user'});
     }
 
+    if (String(fromUserAccount._id) === String(toUserAccount._id)) {
+        return res.status(400).json({error: 'Sender and receiver accounts must be different'});
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -159,7 +209,7 @@ async function createInitialFundsTransaction(req, res) {
         initiatedBySystemUser: true,
         fromAccount: fromUserAccount._id,
         toAccount,
-        amount,
+        amount: normalizedAmount,
         idempotencyKey,
         status: 'PENDING'
     });
@@ -170,14 +220,14 @@ async function createInitialFundsTransaction(req, res) {
     const debitLedgerEntry = await ledgerModel.create([{
         account: fromUserAccount._id,
         type: 'DEBIT',
-        amount: amount, 
+        amount: normalizedAmount, 
         transaction: transaction._id
     }], { session });
 
         const creditLedgerEntry = await ledgerModel.create([{
             account: toAccount,
             type: 'CREDIT',
-            amount: amount,
+            amount: normalizedAmount,
             transaction: transaction._id
         }], { session });
 
@@ -188,36 +238,19 @@ async function createInitialFundsTransaction(req, res) {
     await session.commitTransaction();
     session.endSession();
     
-    // Send email notifications to both sender and receiver
-    try {
-    // Sender mail → only when debit happens
-    if (debitLedgerEntry && debitLedgerEntry.length > 0) {
-        await emailService.senderEmail(
-            fromUserAccount.user.email,
-            fromUserAccount.user.name,
-            amount,
-            toUserAccount.user.name
-        );
-    }
-
-    // Receiver mail → only when credit happens
-    if (creditLedgerEntry && creditLedgerEntry.length > 0) {
-        await emailService.receiverEmail(
-            toUserAccount.user.email,
-            toUserAccount.user.name,
-            amount,
-            fromUserAccount.user.name
-        );
-    }
-
-} catch (error) {
-    console.error('Error sending transaction emails:', error);
-}
+    const emailNotification = await sendTransactionNotifications(
+        fromUserAccount,
+        toUserAccount,
+        normalizedAmount,
+        debitLedgerEntry,
+        creditLedgerEntry
+    );
 
 
     return res.status(201).json({
         message: 'Initial funds transaction completed successfully',
-        transaction: transaction
+        transaction: transaction,
+        emailNotification
     });
 }
 
