@@ -56,4 +56,85 @@ async function getAccountBalance(req, res) {
     });
 }
 
-module.exports = { createAccount, getCurrentUserAccount, getAccountBalance };
+async function getNormalUsersWithAccounts(req, res) {
+    try {
+        const users = await accountModel.aggregate([
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'user',
+                    foreignField: '_id',
+                    as: 'userData'
+                }
+            },
+            { $unwind: '$userData' },
+            { $match: { 'userData.systemUser': false } },
+            {
+                $project: {
+                    _id: 0,
+                    name: '$userData.name',
+                    email: '$userData.email',
+                    accountId: '$_id',
+                    status: '$status',
+                    accountCreatedAt: '$createdAt'
+                }
+            },
+            { $sort: { accountCreatedAt: -1 } }
+        ]);
+
+        return res.status(200).json({
+            message: 'Normal users retrieved successfully',
+            status: 'success',
+            users
+        });
+    } catch (err) {
+        console.error('Error fetching normal users:', err);
+        return res.status(500).json({
+            message: 'Error fetching normal users',
+            status: 'error'
+        });
+    }
+}
+
+async function updateAccountStatusByAdmin(req, res) {
+    try {
+        const { accountId } = req.params;
+        const { status } = req.body;
+
+        const allowedStatuses = ['ACTIVE', 'FROZEN', 'CLOSED'];
+        if (!allowedStatuses.includes(status)) {
+            return res.status(400).json({
+                message: 'Invalid status. Allowed values: ACTIVE, FROZEN, CLOSED',
+                status: 'failed'
+            });
+        }
+
+        const account = await accountModel.findById(accountId);
+        if (!account) {
+            return res.status(404).json({
+                message: 'Account not found',
+                status: 'failed'
+            });
+        }
+
+        account.status = status;
+        await account.save();
+
+        return res.status(200).json({
+            message: 'Account status updated successfully',
+            status: 'success',
+            account: {
+                id: account._id,
+                status: account.status
+            }
+        });
+    } catch (err) {
+        console.error('Error updating account status:', err);
+        return res.status(500).json({
+            message: 'Error updating account status',
+            status: 'error'
+        });
+    }
+}
+
+module.exports = { createAccount, getCurrentUserAccount, getAccountBalance, getNormalUsersWithAccounts, updateAccountStatusByAdmin };

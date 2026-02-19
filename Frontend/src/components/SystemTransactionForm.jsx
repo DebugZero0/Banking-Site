@@ -9,6 +9,8 @@ const SystemTransactionForm = ({ onTransactionSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isSubmitHovered, setIsSubmitHovered] = useState(false);
+  const [isSubmitPressed, setIsSubmitPressed] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -53,13 +55,9 @@ const SystemTransactionForm = ({ onTransactionSuccess }) => {
     <div
   className="p-6 rounded-2xl"
   style={{
-    background: "#ffffff",
-    boxShadow: `
-      8px 8px 20px rgba(0, 0, 0, 0.15),
-      -8px -8px 20px rgba(255, 255, 255, 1),
-      0 0 0 1px rgba(0, 0, 0, 0.04)
-    `
-  }}
+                                    background: "#F7F0F0", // soft yellow base
+                                    boxShadow: `8px 8px 16px rgba(0, 0, 0, 0.1), -8px -8px 16px rgba(255, 255, 255, 0.9)`
+                                }}
 >
 
 
@@ -122,7 +120,23 @@ const SystemTransactionForm = ({ onTransactionSuccess }) => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          className="w-full  text-yellow-800 font-bold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          onMouseEnter={() => setIsSubmitHovered(true)}
+          onMouseLeave={() => {
+            setIsSubmitHovered(false);
+            setIsSubmitPressed(false);
+          }}
+          onMouseDown={() => setIsSubmitPressed(true)}
+          onMouseUp={() => setIsSubmitPressed(false)}
+          style={{
+            background: isSubmitHovered && !loading ? '#FFF19B' : '#EDDCC6',
+            boxShadow: `4px 4px 8px rgba(0, 0, 0, 0.1), -4px -4px 8px rgba(255, 255, 255, 0.9)`,
+            transform: loading
+              ? 'scale(1)'
+              : isSubmitPressed
+                ? 'scale(0.97)'
+                : 'scale(1)'
+          }}
         >
           {loading ? 'Processing...' : 'Send System Transfer'}
         </button>

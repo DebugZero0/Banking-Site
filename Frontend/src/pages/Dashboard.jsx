@@ -18,11 +18,22 @@ const Dashboard = () => {
     const [historyLoading, setHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState('');
     const [historyItems, setHistoryItems] = useState([]);
+    const [adminUsers, setAdminUsers] = useState([]);
+    const [adminUsersLoading, setAdminUsersLoading] = useState(false);
+    const [adminUsersError, setAdminUsersError] = useState('');
+    const [adminStatusDrafts, setAdminStatusDrafts] = useState({});
+    const [updatingStatusForAccountId, setUpdatingStatusForAccountId] = useState('');
     const isAdmin = user?.systemUser === true;
 
     useEffect(() => {
         fetchAccountData();
     }, []);
+
+    useEffect(() => {
+        if (isAdmin) {
+            fetchNormalUsersForAdmin();
+        }
+    }, [isAdmin]);
 
     const fetchAccountData = async () => {
         setLoading(true);
@@ -63,6 +74,27 @@ const Dashboard = () => {
         } catch (err) {
             console.error('Error fetching balance:', err);
             setError('Failed to fetch balance');
+        }
+    };
+
+    const fetchNormalUsersForAdmin = async () => {
+        setAdminUsersLoading(true);
+        setAdminUsersError('');
+
+        try {
+            const response = await accountService.getNormalUsersForAdmin();
+            const users = response.users || [];
+            setAdminUsers(users);
+            const draftMap = users.reduce((acc, item) => {
+                acc[item.accountId] = item.status || 'ACTIVE';
+                return acc;
+            }, {});
+            setAdminStatusDrafts(draftMap);
+        } catch (err) {
+            console.error('Error fetching normal users for admin:', err);
+            setAdminUsersError('Failed to fetch normal users list');
+        } finally {
+            setAdminUsersLoading(false);
         }
     };
 
@@ -124,6 +156,46 @@ const Dashboard = () => {
             dateStyle: 'medium',
             timeStyle: 'short'
         });
+    };
+
+    const formatDate = (dateValue) => {
+        if (!dateValue) return 'N/A';
+        const date = new Date(dateValue);
+        if (Number.isNaN(date.getTime())) return 'N/A';
+        return date.toLocaleDateString('en-GB', {
+            dateStyle: 'medium'
+        });
+    };
+
+    const handleAdminStatusDraftChange = (accountId, nextStatus) => {
+        setAdminStatusDrafts((prev) => ({
+            ...prev,
+            [accountId]: nextStatus
+        }));
+    };
+
+    const handleAdminStatusUpdate = async (accountId) => {
+        const nextStatus = adminStatusDrafts[accountId];
+        if (!nextStatus) return;
+
+        setUpdatingStatusForAccountId(accountId);
+        setAdminUsersError('');
+
+        try {
+            await accountService.updateUserAccountStatusByAdmin(accountId, nextStatus);
+            setAdminUsers((prev) =>
+                prev.map((item) =>
+                    item.accountId === accountId
+                        ? { ...item, status: nextStatus }
+                        : item
+                )
+            );
+        } catch (err) {
+            console.error('Error updating account status:', err);
+            setAdminUsersError(err?.response?.data?.message || 'Failed to update account status');
+        } finally {
+            setUpdatingStatusForAccountId('');
+        }
     };
 
     return (
@@ -216,8 +288,92 @@ const Dashboard = () => {
                             </div>
                         </div>
 
+                        <div
+  className="bg-white rounded-lg shadow-md p-6"
+  style={{
+    background: "#f0f9ff", // soft blue base
+    boxShadow: `
+      8px 8px 16px rgba(0, 0, 0, 0.1),
+      -8px -8px 16px rgba(255, 255, 255, 0.9)
+    `
+  }}
+>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold text-gray-900"> Users</h3>
+                                <button
+                                    type="button"
+                                    onClick={fetchNormalUsersForAdmin}
+                                    className="bg-primary-600 hover:bg-primary-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200"
+                                >
+                                    Refresh
+                                </button>
+                            </div>
+
+                            {adminUsersLoading ? (
+                                <div className="p-4 text-center text-gray-600">Loading users...</div>
+                            ) : adminUsersError ? (
+                                <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                                    {adminUsersError}
+                                </div>
+                            ) : adminUsers.length === 0 ? (
+                                <div className="p-4 text-center text-gray-600">No normal users found.</div>
+                            ) : (
+                                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Name</th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email</th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Account ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Account Created Date</th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {adminUsers.map((item) => (
+                                                <tr key={item.accountId} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{item.name || 'N/A'}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{item.email || 'N/A'}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{item.accountId || 'N/A'}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                                                        <select
+                                                            value={adminStatusDrafts[item.accountId] || item.status || 'ACTIVE'}
+                                                            onChange={(e) => handleAdminStatusDraftChange(item.accountId, e.target.value)}
+                                                            className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                                            disabled={updatingStatusForAccountId === item.accountId}
+                                                        >
+                                                            <option value="ACTIVE">ACTIVE</option>
+                                                            <option value="FROZEN">FROZEN</option>
+                                                            <option value="CLOSED">CLOSED</option>
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{formatDate(item.accountCreatedAt)}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleAdminStatusUpdate(item.accountId)}
+                                                            disabled={updatingStatusForAccountId === item.accountId}
+                                                            className="bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold py-1.5 px-3 rounded-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                        >
+                                                            {updatingStatusForAccountId === item.accountId ? 'Updating...' : 'Update'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div className="bg-white rounded-lg shadow-md p-6">
+                            <div className="bg-white rounded-lg shadow-md p-6"
+                                style={{
+                                    background: "#F7F0F0", // soft yellow base
+                                    boxShadow: `8px 8px 16px rgba(0, 0, 0, 0.1), -8px -8px 16px rgba(255, 255, 255, 0.9)`
+                                }}
+                            >
                                 <div className="flex items-center justify-between mb-4">
                                     <h2 className="text-xl font-bold text-gray-900">Transactions</h2>
                                     <button

@@ -56,6 +56,16 @@ export const accountService = {
     const response = await api.get(`/accounts/balance/${accountId}`);
     return response.data;
   },
+
+  getNormalUsersForAdmin: async () => {
+    const response = await api.get('/accounts/system/normal-users');
+    return response.data;
+  },
+
+  updateUserAccountStatusByAdmin: async (accountId, status) => {
+    const response = await api.patch(`/accounts/system/status/${accountId}`, { status });
+    return response.data;
+  },
 };
 
 export const transactionService = {

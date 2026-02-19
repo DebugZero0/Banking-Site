@@ -13,5 +13,11 @@ router.get('/my-account', authMiddleware.authMiddleware, accountController.getCu
 // GET /api/accounts/balance/:accountId
 router.get('/balance/:accountId', authMiddleware.authMiddleware, accountController.getAccountBalance);
 
+// GET /api/accounts/system/normal-users - Admin only normal users list with account details
+router.get('/system/normal-users', authMiddleware.authSystemUserMiddleware, accountController.getNormalUsersWithAccounts);
+
+// PATCH /api/accounts/system/status/:accountId - Admin updates user account status
+router.patch('/system/status/:accountId', authMiddleware.authSystemUserMiddleware, accountController.updateAccountStatusByAdmin);
+
 
 module.exports=router 
