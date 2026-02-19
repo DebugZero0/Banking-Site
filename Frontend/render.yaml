@@ -1,0 +1,11 @@
+services:
+  - type: static_site
+    name: banking-frontend
+    staticPublishDir: ./dist
+    buildCommand: npm install && npm run build
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: banking-backend
+          property: url

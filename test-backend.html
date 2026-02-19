@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Test</title>
+</head>
+<body>
+    <h1>Backend Connection Test</h1>
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="testRegister()">Test Register</button>
+    <pre id="output"></pre>
+
+    <script>
+        const output = document.getElementById('output');
+
+        async function testRegister() {
+            output.textContent = 'Testing registration...';
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        name: 'Test User',
+                        email: 'test' + Date.now() + '@test.com',
+                        password: 'password123'
+                    })
+                });
+                const data = await response.json();
+                output.textContent = 'Register Response:\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                output.textContent = 'Register Error:\n' + error.message;
+            }
+        }
+
+        async function testLogin() {
+            output.textContent = 'Testing login...';
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        email: 'test@test.com',
+                        password: 'password123'
+                    })
+                });
+                const data = await response.json();
+                output.textContent = 'Login Response:\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                output.textContent = 'Login Error:\n' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
