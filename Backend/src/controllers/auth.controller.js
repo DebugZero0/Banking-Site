@@ -16,14 +16,6 @@ async function register(req, res) {
     const user = new UserModel({ email, password, name });
     await user.save();
 
-    let emailSent = false;
-    try {
-        await emailService.sendRegistrationEmail(user.email, user.name);
-        emailSent = true;
-    } catch (error) {
-        console.error('Registration email failed:', error?.message || error);
-    }
-
     const token = jwt.sign({id: user._id }, process.env.JWT_SECRET, { expiresIn: '3d' });
     res.cookie('token', token);
 
@@ -39,7 +31,15 @@ async function register(req, res) {
             lastLogoutAt: user.lastLogoutAt,
         },
         token,
-        emailSent
+        emailQueued: true
+    });
+
+    setImmediate(() => {
+        emailService
+            .sendRegistrationEmail(user.email, user.name)
+            .catch((error) => {
+                console.error('Registration email failed:', error?.message || error);
+            });
     });
 }
 

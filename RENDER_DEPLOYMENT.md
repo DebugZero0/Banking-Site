@@ -37,9 +37,11 @@ EMAIL_USER=your_email@gmail.com
 CLIENT_ID=your_google_client_id
 CLIENT_SECRET=your_google_client_secret
 REFRESH_TOKEN=your_google_refresh_token
+# Optional alternative to OAuth2:
+EMAIL_PASS=your_gmail_app_password
 ```
 
-**Note:** Replace placeholders with actual values
+**Note:** Replace placeholders with actual values. Use either OAuth2 (`CLIENT_ID`, `CLIENT_SECRET`, `REFRESH_TOKEN`) or `EMAIL_PASS` with `EMAIL_USER`.
 
 ### 4. Deploy Backend
 

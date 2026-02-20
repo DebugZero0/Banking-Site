@@ -1,31 +1,62 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 
-// Create a transporter using Gmail and OAuth2 authentication
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        type: 'OAuth2',
-        user: process.env.EMAIL_USER,
-        clientId: process.env.CLIENT_ID,
-        clientSecret: process.env.CLIENT_SECRET,
-        refreshToken: process.env.REFRESH_TOKEN,
-    },
-});
+const hasOAuthConfig = Boolean(
+    process.env.EMAIL_USER &&
+    process.env.CLIENT_ID &&
+    process.env.CLIENT_SECRET &&
+    process.env.REFRESH_TOKEN
+);
+const hasAppPasswordConfig = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 
-// Verify the connection configuration
-transporter.verify((error, success) => {
-    if (error) {
-        console.error('Error connecting to email server:', error);
-    } else {
-        console.log('Email server is ready to send messages');
-    }
-});
-module.exports = transporter;
+let transporter = null;
+
+if (hasOAuthConfig) {
+    transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            type: 'OAuth2',
+            user: process.env.EMAIL_USER,
+            clientId: process.env.CLIENT_ID,
+            clientSecret: process.env.CLIENT_SECRET,
+            refreshToken: process.env.REFRESH_TOKEN,
+        },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000,
+    });
+} else if (hasAppPasswordConfig) {
+    transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+        },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000,
+    });
+}
+
+if (transporter) {
+    transporter.verify((error) => {
+        if (error) {
+            console.error('Error connecting to email server:', error?.message || error);
+        } else {
+            console.log('Email server is ready to send messages');
+        }
+    });
+} else {
+    console.warn('Email service is disabled: provide OAuth2 vars or EMAIL_USER + EMAIL_PASS.');
+}
 
 // Function to send email
 const sendEmail = async (to, subject, text, html) => {
     try {
+        if (!transporter) {
+            throw new Error('Email transporter is not configured');
+        }
+
         const info = await transporter.sendMail({
             from: `"Secure Banking" <${process.env.EMAIL_USER}>`, // sender address
             to, // list of receivers
@@ -42,7 +73,6 @@ const sendEmail = async (to, subject, text, html) => {
         throw error;
     }
 };
-module.exports = sendEmail;
 
 // Function to send registration email
 // async function sendRegistrationEmail(to, name) {
