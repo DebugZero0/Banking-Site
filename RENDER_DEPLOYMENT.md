@@ -34,6 +34,7 @@ MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/banking
 JWT_SECRET=your_strong_jwt_secret_here
 CORS_ORIGINS=http://localhost:3000,https://your-frontend-domain.onrender.com
 EMAIL_USER=your_email@gmail.com
+EMAIL_AUTH_MODE=app-password
 CLIENT_ID=your_google_client_id
 CLIENT_SECRET=your_google_client_secret
 REFRESH_TOKEN=your_google_refresh_token
@@ -41,7 +42,7 @@ REFRESH_TOKEN=your_google_refresh_token
 EMAIL_PASS=your_gmail_app_password
 ```
 
-**Note:** Replace placeholders with actual values. Use either OAuth2 (`CLIENT_ID`, `CLIENT_SECRET`, `REFRESH_TOKEN`) or `EMAIL_PASS` with `EMAIL_USER`.
+**Note:** Replace placeholders with actual values. Use either OAuth2 (`CLIENT_ID`, `CLIENT_SECRET`, `REFRESH_TOKEN`) or `EMAIL_PASS` with `EMAIL_USER`. If both are present, set `EMAIL_AUTH_MODE` to choose explicitly.
 
 ### 4. Deploy Backend
 

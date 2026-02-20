@@ -8,10 +8,11 @@ const hasOAuthConfig = Boolean(
     process.env.REFRESH_TOKEN
 );
 const hasAppPasswordConfig = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+const emailAuthMode = (process.env.EMAIL_AUTH_MODE || '').trim().toLowerCase();
 
 let transporter = null;
 
-if (hasOAuthConfig) {
+if ((emailAuthMode === 'oauth2' || emailAuthMode === 'oauth') && hasOAuthConfig) {
     transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -20,6 +21,17 @@ if (hasOAuthConfig) {
             clientId: process.env.CLIENT_ID,
             clientSecret: process.env.CLIENT_SECRET,
             refreshToken: process.env.REFRESH_TOKEN,
+        },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000,
+    });
+} else if ((emailAuthMode === 'app-password' || emailAuthMode === 'app_password' || emailAuthMode === 'apppassword') && hasAppPasswordConfig) {
+    transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
         },
         connectionTimeout: 8000,
         greetingTimeout: 8000,
@@ -36,6 +48,20 @@ if (hasOAuthConfig) {
         greetingTimeout: 8000,
         socketTimeout: 10000,
     });
+} else if (hasOAuthConfig) {
+    transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            type: 'OAuth2',
+            user: process.env.EMAIL_USER,
+            clientId: process.env.CLIENT_ID,
+            clientSecret: process.env.CLIENT_SECRET,
+            refreshToken: process.env.REFRESH_TOKEN,
+        },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000,
+    });
 }
 
 if (transporter) {
@@ -47,7 +73,7 @@ if (transporter) {
         }
     });
 } else {
-    console.warn('Email service is disabled: provide OAuth2 vars or EMAIL_USER + EMAIL_PASS.');
+    console.warn('Email service is disabled: provide EMAIL_USER + EMAIL_PASS or OAuth2 vars.');
 }
 
 // Function to send email
