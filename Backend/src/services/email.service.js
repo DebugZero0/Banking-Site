@@ -1,14 +1,24 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 
-const hasOAuthConfig = Boolean(
-    process.env.EMAIL_USER &&
-    process.env.CLIENT_ID &&
-    process.env.CLIENT_SECRET &&
-    process.env.REFRESH_TOKEN
-);
-const hasAppPasswordConfig = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
-const emailAuthMode = (process.env.EMAIL_AUTH_MODE || '').trim().toLowerCase();
+const normalizeEnv = (value) => {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+};
+
+const EMAIL_USER = normalizeEnv(process.env.EMAIL_USER);
+const EMAIL_PASS = normalizeEnv(process.env.EMAIL_PASS);
+const CLIENT_ID = normalizeEnv(process.env.CLIENT_ID);
+const CLIENT_SECRET = normalizeEnv(process.env.CLIENT_SECRET);
+const REFRESH_TOKEN = normalizeEnv(process.env.REFRESH_TOKEN);
+const emailAuthMode = normalizeEnv(process.env.EMAIL_AUTH_MODE).toLowerCase();
+
+const hasOAuthConfig = Boolean(EMAIL_USER && CLIENT_ID && CLIENT_SECRET && REFRESH_TOKEN);
+const hasAppPasswordConfig = Boolean(EMAIL_USER && EMAIL_PASS);
 
 let transporter = null;
 let selectedAuthMode = null;
@@ -19,7 +29,23 @@ if (emailAuthMode) {
     } else if ((emailAuthMode === 'app-password' || emailAuthMode === 'app_password' || emailAuthMode === 'apppassword') && hasAppPasswordConfig) {
         selectedAuthMode = 'app-password';
     } else {
-        console.warn(`Email service is disabled: EMAIL_AUTH_MODE is set to "${emailAuthMode}" but matching credentials are missing.`);
+        const missingForOAuth = [
+            !EMAIL_USER ? 'EMAIL_USER' : null,
+            !CLIENT_ID ? 'CLIENT_ID' : null,
+            !CLIENT_SECRET ? 'CLIENT_SECRET' : null,
+            !REFRESH_TOKEN ? 'REFRESH_TOKEN' : null,
+        ].filter(Boolean);
+
+        const missingForAppPassword = [
+            !EMAIL_USER ? 'EMAIL_USER' : null,
+            !EMAIL_PASS ? 'EMAIL_PASS' : null,
+        ].filter(Boolean);
+
+        console.warn(
+            `Email service is disabled: EMAIL_AUTH_MODE="${emailAuthMode}" does not match available credentials.` +
+            ` Missing OAuth vars: [${missingForOAuth.join(', ') || 'none'}],` +
+            ` Missing App-Password vars: [${missingForAppPassword.join(', ') || 'none'}].`
+        );
     }
 } else if (hasAppPasswordConfig) {
     selectedAuthMode = 'app-password';
@@ -32,31 +58,32 @@ if (selectedAuthMode === 'oauth2') {
         service: 'gmail',
         auth: {
             type: 'OAuth2',
-            user: process.env.EMAIL_USER,
-            clientId: process.env.CLIENT_ID,
-            clientSecret: process.env.CLIENT_SECRET,
-            refreshToken: process.env.REFRESH_TOKEN,
+            user: EMAIL_USER,
+            clientId: CLIENT_ID,
+            clientSecret: CLIENT_SECRET,
+            refreshToken: REFRESH_TOKEN,
         },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000,
+        connectionTimeout: 12000,
+        greetingTimeout: 12000,
+        socketTimeout: 15000,
     });
 } else if (selectedAuthMode === 'app-password') {
     transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
+            user: EMAIL_USER,
+            pass: EMAIL_PASS,
         },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000,
+        connectionTimeout: 12000,
+        greetingTimeout: 12000,
+        socketTimeout: 15000,
     });
 }
+
 if (transporter) {
     transporter.verify((error) => {
         if (error) {
-            console.error('Error connecting to email server:', error?.message || error);
+            console.error('Email transporter verify failed:', error?.message || error);
         } else {
             console.log('Email server is ready to send messages using ' + selectedAuthMode);
         }
