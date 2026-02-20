@@ -47,10 +47,10 @@ const Register = () => {
       const { name, email, password } = formData;
       const response = await register({ name, email, password });
 
-      if (response?.emailSent) {
-        setSuccess('Account created successfully. Welcome email sent. Redirecting...');
+      if (response?.emailQueued) {
+        setSuccess('Account created successfully. Welcome email is being sent. Redirecting...');
       } else {
-        setSuccess('Account created successfully. Email could not be sent right now. Redirecting...');
+        setSuccess('Account created successfully. Redirecting...');
       }
 
       setTimeout(() => {

@@ -11,44 +11,23 @@ const hasAppPasswordConfig = Boolean(process.env.EMAIL_USER && process.env.EMAIL
 const emailAuthMode = (process.env.EMAIL_AUTH_MODE || '').trim().toLowerCase();
 
 let transporter = null;
+let selectedAuthMode = null;
 
-if ((emailAuthMode === 'oauth2' || emailAuthMode === 'oauth') && hasOAuthConfig) {
-    transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            type: 'OAuth2',
-            user: process.env.EMAIL_USER,
-            clientId: process.env.CLIENT_ID,
-            clientSecret: process.env.CLIENT_SECRET,
-            refreshToken: process.env.REFRESH_TOKEN,
-        },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000,
-    });
-} else if ((emailAuthMode === 'app-password' || emailAuthMode === 'app_password' || emailAuthMode === 'apppassword') && hasAppPasswordConfig) {
-    transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000,
-    });
+if (emailAuthMode) {
+    if ((emailAuthMode === 'oauth2' || emailAuthMode === 'oauth') && hasOAuthConfig) {
+        selectedAuthMode = 'oauth2';
+    } else if ((emailAuthMode === 'app-password' || emailAuthMode === 'app_password' || emailAuthMode === 'apppassword') && hasAppPasswordConfig) {
+        selectedAuthMode = 'app-password';
+    } else {
+        console.warn(`Email service is disabled: EMAIL_AUTH_MODE is set to "${emailAuthMode}" but matching credentials are missing.`);
+    }
 } else if (hasAppPasswordConfig) {
-    transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000,
-    });
+    selectedAuthMode = 'app-password';
 } else if (hasOAuthConfig) {
+    selectedAuthMode = 'oauth2';
+}
+
+if (selectedAuthMode === 'oauth2') {
     transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -57,19 +36,29 @@ if ((emailAuthMode === 'oauth2' || emailAuthMode === 'oauth') && hasOAuthConfig)
             clientId: process.env.CLIENT_ID,
             clientSecret: process.env.CLIENT_SECRET,
             refreshToken: process.env.REFRESH_TOKEN,
+        },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000,
+    });
+} else if (selectedAuthMode === 'app-password') {
+    transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
         },
         connectionTimeout: 8000,
         greetingTimeout: 8000,
         socketTimeout: 10000,
     });
 }
-
 if (transporter) {
     transporter.verify((error) => {
         if (error) {
             console.error('Error connecting to email server:', error?.message || error);
         } else {
-            console.log('Email server is ready to send messages');
+            console.log('Email server is ready to send messages using ' + selectedAuthMode);
         }
     });
 } else {
@@ -95,7 +84,7 @@ const sendEmail = async (to, subject, text, html) => {
         console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
         return info;
     } catch (error) {
-        console.error('Error sending email:', error);
+        console.error('Error sending email:', error?.message || error);
         throw error;
     }
 };
