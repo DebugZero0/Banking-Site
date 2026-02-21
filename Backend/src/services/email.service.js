@@ -69,11 +69,16 @@ if (selectedAuthMode === 'oauth2') {
     });
 } else if (selectedAuthMode === 'app-password') {
     transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        family: 4, // 👈 force IPv4 (fixes Render ENETUNREACH)
+
         auth: {
             user: EMAIL_USER,
             pass: EMAIL_PASS,
         },
+
         connectionTimeout: 12000,
         greetingTimeout: 12000,
         socketTimeout: 15000,
