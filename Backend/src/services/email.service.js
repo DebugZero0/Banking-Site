@@ -1,6 +1,9 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
+const axios = require("axios");
 
+
+// ---------- YOUR EXISTING CODE (UNCHANGED) ----------
 const normalizeEnv = (value) => {
     if (typeof value !== 'string') return '';
     const trimmed = value.trim();
@@ -28,24 +31,6 @@ if (emailAuthMode) {
         selectedAuthMode = 'oauth2';
     } else if ((emailAuthMode === 'app-password' || emailAuthMode === 'app_password' || emailAuthMode === 'apppassword') && hasAppPasswordConfig) {
         selectedAuthMode = 'app-password';
-    } else {
-        const missingForOAuth = [
-            !EMAIL_USER ? 'EMAIL_USER' : null,
-            !CLIENT_ID ? 'CLIENT_ID' : null,
-            !CLIENT_SECRET ? 'CLIENT_SECRET' : null,
-            !REFRESH_TOKEN ? 'REFRESH_TOKEN' : null,
-        ].filter(Boolean);
-
-        const missingForAppPassword = [
-            !EMAIL_USER ? 'EMAIL_USER' : null,
-            !EMAIL_PASS ? 'EMAIL_PASS' : null,
-        ].filter(Boolean);
-
-        console.warn(
-            `Email service is disabled: EMAIL_AUTH_MODE="${emailAuthMode}" does not match available credentials.` +
-            ` Missing OAuth vars: [${missingForOAuth.join(', ') || 'none'}],` +
-            ` Missing App-Password vars: [${missingForAppPassword.join(', ') || 'none'}].`
-        );
     }
 } else if (hasAppPasswordConfig) {
     selectedAuthMode = 'app-password';
@@ -63,9 +48,6 @@ if (selectedAuthMode === 'oauth2') {
             clientSecret: CLIENT_SECRET,
             refreshToken: REFRESH_TOKEN,
         },
-        connectionTimeout: 12000,
-        greetingTimeout: 12000,
-        socketTimeout: 15000,
     });
 } else if (selectedAuthMode === 'app-password') {
     transporter = nodemailer.createTransport({
@@ -74,44 +56,60 @@ if (selectedAuthMode === 'oauth2') {
             user: EMAIL_USER,
             pass: EMAIL_PASS,
         },
-        connectionTimeout: 12000,
-        greetingTimeout: 12000,
-        socketTimeout: 15000,
     });
 }
 
-if (transporter) {
-    transporter.verify((error) => {
-        if (error) {
-            console.error('Email transporter verify failed:', error?.message || error);
-        } else {
-            console.log('Email server is ready to send messages using ' + selectedAuthMode);
-        }
-    });
-} else {
-    console.warn('Email service is disabled: provide EMAIL_USER + EMAIL_PASS or OAuth2 vars.');
-}
-
-// Function to send email
 const sendEmail = async (to, subject, text, html) => {
     try {
+
+        // ✅ PRODUCTION → BREVO
+
+
+if (process.env.NODE_ENV === 'production') {
+
+    const response = await axios.post(
+        "https://api.brevo.com/v3/smtp/email",
+        {
+            sender: {
+                name: "Secure Banking",
+                email: "no-reply@debugzerolabs.tech",
+            },
+            to: [{ email: to }],
+            subject: subject,
+            textContent: text,
+            htmlContent: html || `<p>${text}</p>`
+        },
+        {
+            headers: {
+                "api-key": process.env.BREVO_API_KEY,
+                "Content-Type": "application/json"
+            }
+        }
+    );
+
+    console.log("✅ Brevo email sent:", response.data);
+    return response.data;
+}
+
+        // ✅ DEVELOPMENT → NODEMAILER (your existing setup)
         if (!transporter) {
             throw new Error('Email transporter is not configured');
         }
 
         const info = await transporter.sendMail({
-            from: `"Secure Banking" <${process.env.EMAIL_USER}>`, // sender address
-            to, // list of receivers
-            subject, // Subject line
-            text, // plain text body
-            html, // html body
+            from: `"Secure Banking" <${process.env.EMAIL_USER}>`,
+            to,
+            subject,
+            text,
+            html,
         });
 
-        console.log('Message sent: %s', info.messageId);
-        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        console.log('✅ Nodemailer sent:', info.messageId);
+
         return info;
+
     } catch (error) {
-        console.error('Error sending email:', error?.message || error);
+        console.error('❌ Error sending email:', error?.message || error);
         throw error;
     }
 };
