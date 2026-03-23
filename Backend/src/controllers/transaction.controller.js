@@ -60,7 +60,7 @@ async function createTransaction(req, res) {
 
     const fromUserAccount= await accountModel.findOne({
         user: req.user?._id
-    }).populate('user')
+    }).populate({ path: 'user', select: 'name email +systemUser' })
 
     if (!fromUserAccount) {
         return res.status(404).json({error: 'Sender account not found for this user'});
@@ -72,13 +72,17 @@ async function createTransaction(req, res) {
 
     const toUserAccount= await accountModel.findOne({
         _id: toAccount
-    }).populate('user')
+    }).populate({ path: 'user', select: 'name email +systemUser' })
     if (!fromUserAccount || !toUserAccount) {
         return res.status(404).json({error: 'Account not found'});
     }
 
     if (String(fromUserAccount._id) === String(toUserAccount._id)) {
         return res.status(400).json({error: 'Sender and receiver accounts must be different'});
+    }
+
+    if (!req.user?.systemUser && toUserAccount.user?.systemUser) {
+        return res.status(403).json({ error: 'Normal users cannot send money to admin accounts' });
     }
 
     // validate idempotency key
